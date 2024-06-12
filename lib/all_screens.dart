@@ -25,7 +25,7 @@ class AllStickersScreen extends StatelessWidget {
                         .collection('packs')
                         .doc(pack.id)
                         .collection('stickers')
-                        .limit(5) // Limit to first 5 stickers
+                        .limit(5)
                         .snapshots(),
                     builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
                       if (!snapshot.hasData) {

@@ -3,12 +3,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_editor_plus/options.dart';
+// import 'package:image_editor_plus/options.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_editor_plus/image_editor_plus.dart';
 import 'package:background_remover/background_remover.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:testing_sticker/background_remover_screen.dart';
+import 'package:testing_sticker/manualbackgroundremovalscreen.dart';
 
 class StickerPackScreen extends StatefulWidget {
   final String packId;
@@ -45,27 +47,31 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     Navigator.pop(context);
   }
 
-  void _showBottomSheet(BuildContext context, int index) {
+  void _showBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       builder: (context) {
         return BottomSheetContent(
           packId: widget.packId,
           onImageSelected: (Uint8List imageData) async {
-            // Remove background and resize to 400x400
-            Uint8List? imageWithoutBackground = await _removeBackground(imageData);
-            if (imageWithoutBackground != null) {
-              setState(() {
-                _imageDataList[index] = imageWithoutBackground;
-              });
-              Navigator.pop(context);
-              _openImageEditor(context, imageWithoutBackground, index);
-            }
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ManualBackgroundRemovalScreen(
+                  imageData: imageData,
+                  onImageReady: (processedImageData) {
+                    _openImageEditor(context, processedImageData, _imageDataList.length);
+                  },
+                ),
+              ),
+            );
           },
         );
       },
     );
   }
+
 
   Future<Uint8List?> _removeBackground(Uint8List imageData) async {
     try {
@@ -105,10 +111,10 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
       MaterialPageRoute(
         builder: (context) => ImageEditor(
           image: imageData,
-          cropOption: const CropOption(
-            reversible: false,
-          ),
-          emojiOption: EmojiOption(),
+          // cropOption: const CropOption(
+          //   reversible: false,
+          // ),
+          // emojiOption: EmojiOption(),
         ),
       ),
     );
@@ -128,79 +134,87 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          _showBottomSheet(context);
+        },
+        label: Text('Add a New Sticker'),
+        icon: Icon(Icons.add),
+      ),
+
       appBar: AppBar(
         title: Text(widget.packName),
       ),
       body: StreamBuilder(
-        stream: FirebaseFirestore.instance.collection('packs').doc(widget.packId).collection('stickers').snapshots(),
-        builder: (context,AsyncSnapshot<QuerySnapshot> snapshot ){
-          if(snapshot.connectionState == ConnectionState.waiting){
-            return Center(child: CupertinoActivityIndicator(),);
-          }else if (snapshot.data!.docs.isEmpty){
-            return GridView.builder(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                childAspectRatio: 1,
-              ),
-              itemCount: 30,
-              itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () {
-                    if (_imageDataList[index] != null) {
-                      _openImageEditor(context, _imageDataList[index]!, index);
-                    } else {
-                      _showBottomSheet(context, index);
-                    }
-                  },
-                  child: Container(
-                    margin: EdgeInsets.all(4.0),
-                    color: Colors.grey[200],
-                    child: _isUploading[index]
-                        ? Center(child: CircularProgressIndicator())
-                        : _imageDataList[index] != null
-                        ? Image.memory(
-                      _imageDataList[index]!,
-                      fit: BoxFit.cover,
-                    )
-                        : Icon(Icons.add),
-                  ),
-                );
-              },
-            );
-          }else if (snapshot.hasData){
-            var data = snapshot.data!.docs;
-            return GridView.builder(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                childAspectRatio: 1,
-              ),
-              itemCount: data.length,
-              itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () {
-                    if (index < _imageDataList.length && _imageDataList[index] != null) {
-                      _openImageEditor(context, _imageDataList[index]!, index);
-                    } else {
-                      _showBottomSheet(context, index);
-                    }
-                  },
-                  child: Container(
-                    margin: EdgeInsets.all(4.0),
-                    color: Colors.grey[200],
-                    child: data[index]['image_url'] != null
-                        ? Image.network(
-                      data[index]['image_url'],
-                      fit: BoxFit.cover,
-                    )
-                        : Icon(Icons.add),
-                  ),
-                );
-              },
-            );
-          }else{
-            return Center(child: Icon(Icons.error),);
+          stream: FirebaseFirestore.instance.collection('packs').doc(widget.packId).collection('stickers').snapshots(),
+          builder: (context,AsyncSnapshot<QuerySnapshot> snapshot ){
+            if(snapshot.connectionState == ConnectionState.waiting){
+              return Center(child: CupertinoActivityIndicator(),);
+            }else if (snapshot.data!.docs.isEmpty){
+              return GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  childAspectRatio: 1,
+                ),
+                itemCount: 30,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onTap: () {
+                    //   if (_imageDataList[index] != null) {
+                    //     _openImageEditor(context, _imageDataList[index]!, index);
+                    //   } else {
+                    //     _showBottomSheet(context);
+                    //   }
+                    },
+                    child: Container(
+                      margin: EdgeInsets.all(4.0),
+                      color: Colors.grey[200],
+                      child: _isUploading[index]
+                          ? Center(child: CircularProgressIndicator())
+                          : _imageDataList[index] != null
+                          ? Image.memory(
+                        _imageDataList[index]!,
+                        fit: BoxFit.cover,
+                      )
+                          : Icon(Icons.add),
+                    ),
+                  );
+                },
+              );
+            }else if (snapshot.hasData){
+              var data = snapshot.data!.docs;
+              return GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  childAspectRatio: 1,
+                ),
+                itemCount: data.length,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    // onTap: () {
+                    //   if (index < _imageDataList.length && _imageDataList[index] != null) {
+                    //     _openImageEditor(context, _imageDataList[index]!, index);
+                    //   } else {
+                    //     _showBottomSheet(context, index);
+                    //   }
+                    // },
+                    child: Container(
+                      margin: EdgeInsets.all(4.0),
+                      color: Colors.grey[200],
+                      child: data[index]['image_url'] != null
+                          ? Image.network(
+                        data[index]['image_url'],
+                        fit: BoxFit.cover,
+                      )
+                          : Icon(Icons.add),
+                    ),
+                  );
+                },
+              );
+            }else{
+              return Center(child: Icon(Icons.error),);
+            }
           }
-        }
       ),
     );
   }

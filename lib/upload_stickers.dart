@@ -12,7 +12,7 @@ class UploadStickerScreen extends StatefulWidget {
 
 class _UploadStickerScreenState extends State<UploadStickerScreen> {
   final _formKey = GlobalKey<FormState>();
-  String _packName = '';
+  String _authorName = '';
   String _stickerName = '';
   File? _imageFile;
 
@@ -31,22 +31,20 @@ class _UploadStickerScreenState extends State<UploadStickerScreen> {
     if (_formKey.currentState!.validate() && _imageFile != null) {
       _formKey.currentState!.save();
       String userId = FirebaseAuth.instance.currentUser!.uid;
-      DocumentReference packRef = FirebaseFirestore.instance.collection('packs').doc();
-
-      await packRef.set({
-        'name': _packName,
-        'user_id': userId,
-      });
-
       String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      Reference storageRef = FirebaseStorage.instance.ref().child('stickers/$fileName');
+      Reference storageRef = FirebaseStorage.instance.ref().child('packs/$fileName');
       UploadTask uploadTask = storageRef.putFile(_imageFile!);
       TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => null);
       String imageUrl = await taskSnapshot.ref.getDownloadURL();
-
-      await packRef.collection('stickers').add({
+      await FirebaseFirestore.instance.collection('packs').add({
         'name': _stickerName,
-        'image_url': imageUrl,
+        'pack_image': imageUrl,
+        'user_id':userId,
+        'is_animated':'false',
+        'author_name':_authorName,
+      }).then((value){
+
+        Navigator.pop(context);
       });
 
     }
@@ -67,7 +65,7 @@ class _UploadStickerScreenState extends State<UploadStickerScreen> {
               TextFormField(
                 decoration: InputDecoration(labelText: 'Pack Name'),
                 onSaved: (value) {
-                  _packName = value!;
+                  _authorName = value!;
                 },
                 validator: (value) {
                   if (value!.isEmpty) {
@@ -76,18 +74,18 @@ class _UploadStickerScreenState extends State<UploadStickerScreen> {
                   return null;
                 },
               ),
-              // TextFormField(
-              //   decoration: InputDecoration(labelText: 'Sticker Name'),
-              //   onSaved: (value) {
-              //     _stickerName = value!;
-              //   },
-              //   validator: (value) {
-              //     if (value!.isEmpty) {
-              //       return 'Please enter a sticker name';
-              //     }
-              //     return null;
-              //   },
-              // ),
+              TextFormField(
+                decoration: InputDecoration(labelText: 'author Name'),
+                onSaved: (value) {
+                  _stickerName = value!;
+                },
+                validator: (value) {
+                  if (value!.isEmpty) {
+                    return 'Please enter a sticker name';
+                  }
+                  return null;
+                },
+              ),
               SizedBox(height: 20.0),
               _imageFile == null
                   ? Text('No image selected.')

@@ -33,9 +33,9 @@ class UserPacksScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               var pack = packs[index];
               return ListTile(
-                leading: Image.network(pack['pack_image']),
+                // leading: Image.network(pack['pack_image']),
                 title: Text(pack['name']),
-                subtitle: Text(pack['author_name']),
+                // subtitle: Text(pack['author_name']),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -56,5 +56,4 @@ class UserPacksScreen extends StatelessWidget {
     );
   }
 }
-
 

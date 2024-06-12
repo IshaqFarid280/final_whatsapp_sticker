@@ -33,7 +33,6 @@ class _UploadStickerScreenState extends State<UploadStickerScreen> {
   Future<void> _uploadSticker() async {
     if (_formKey.currentState!.validate() && _imageFile != null) {
       _formKey.currentState!.save();
-
       String fileName = DateTime.now().millisecondsSinceEpoch.toString();
       Reference storageRef = FirebaseStorage.instance.ref().child('stickers/$fileName');
       UploadTask uploadTask = storageRef.putFile(_imageFile!);
