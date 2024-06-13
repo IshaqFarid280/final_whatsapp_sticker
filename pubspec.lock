@@ -137,6 +137,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.0"
+  dio:
+    dependency: transitive
+    description:
+      name: dio
+      sha256: "11e40df547d418cc0c4900a9318b26304e665da6fa4755399a9ff9efd09034b5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.4.3+1"
   extended_image:
     dependency: transitive
     description:
@@ -754,6 +762,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.4-beta"
+  whatsapp_stickers_handler:
+    dependency: "direct main"
+    description:
+      path: "plugins/whatsapp_stickers_handler"
+      relative: true
+    source: path
+    version: "0.0.1+1"
   win32:
     dependency: transitive
     description:

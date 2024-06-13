@@ -18,6 +18,7 @@ class UserPacksScreen extends StatelessWidget {
         child: Icon(Icons.add),
       ),
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text('My Sticker Packs'),
       ),
       body: StreamBuilder(
@@ -44,6 +45,7 @@ class UserPacksScreen extends StatelessWidget {
                         packId: pack.id,
                         packName: pack['name'],
                         userId:pack['user_id'],
+                        trayImage:pack['pack_image'] ,
                       ),
                     ),
                   );

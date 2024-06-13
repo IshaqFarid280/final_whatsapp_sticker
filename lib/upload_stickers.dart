@@ -1,9 +1,13 @@
+import 'package:background_remover/background_remover.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
 
 class UploadStickerScreen extends StatefulWidget {
   @override
@@ -12,8 +16,8 @@ class UploadStickerScreen extends StatefulWidget {
 
 class _UploadStickerScreenState extends State<UploadStickerScreen> {
   final _formKey = GlobalKey<FormState>();
+  String _authorName = '';
   String _packName = '';
-  String _stickerName = '';
   File? _imageFile;
 
   final picker = ImagePicker();
@@ -27,28 +31,57 @@ class _UploadStickerScreenState extends State<UploadStickerScreen> {
     });
   }
 
+  Future<Uint8List?> _processImage(File imageFile) async {
+    Uint8List imageData = await imageFile.readAsBytes();
+    Uint8List? imageWithoutBackground = await removeBackground(imageBytes: imageData);
+
+    if (imageWithoutBackground == null) {
+      return null; // Return null if background removal failed
+    }
+
+    img.Image image = img.decodeImage(imageWithoutBackground)!;
+    img.Image resizedImage = img.copyResize(image, width: 96, height: 96);
+
+    List<int> pngData = img.encodePng(resizedImage);
+    Uint8List compressedImage = await FlutterImageCompress.compressWithList(
+      Uint8List.fromList(pngData),
+      minWidth: 96,
+      minHeight: 96,
+      quality: 50, // Lower the quality further
+      format: CompressFormat.png, // Try JPEG instead of PNG
+      rotate: 0,
+    );
+
+
+    if (compressedImage.lengthInBytes > 100 * 1024) {
+      print("Image size is still greater than 100 KB after further compression.");
+      return null; // Handle this case as needed
+    }
+
+    return compressedImage;
+  }
+
+
   Future<void> _uploadSticker() async {
     if (_formKey.currentState!.validate() && _imageFile != null) {
       _formKey.currentState!.save();
       String userId = FirebaseAuth.instance.currentUser!.uid;
-      DocumentReference packRef = FirebaseFirestore.instance.collection('packs').doc();
+      Uint8List? processedImageData = await _processImage(_imageFile!);
 
-      await packRef.set({
-        'name': _packName,
-        'user_id': userId,
-      });
-
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      Reference storageRef = FirebaseStorage.instance.ref().child('stickers/$fileName');
-      UploadTask uploadTask = storageRef.putFile(_imageFile!);
-      TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => null);
-      String imageUrl = await taskSnapshot.ref.getDownloadURL();
-
-      await packRef.collection('stickers').add({
-        'name': _stickerName,
-        'image_url': imageUrl,
-      });
-
+      if (processedImageData != null) {
+        String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+        Reference storageRef = FirebaseStorage.instance.ref().child('packs/$fileName.png');
+        UploadTask uploadTask = storageRef.putData(processedImageData);
+        TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => null);
+        String imageUrl = await taskSnapshot.ref.getDownloadURL();
+        await FirebaseFirestore.instance.collection('packs').add({
+          'name': _packName,
+          'pack_image': imageUrl,
+          'user_id': userId,
+          'is_animated': 'false',
+          'author_name': _authorName,
+        });
+      }
     }
   }
 
@@ -65,33 +98,33 @@ class _UploadStickerScreenState extends State<UploadStickerScreen> {
           child: Column(
             children: <Widget>[
               TextFormField(
+                decoration: InputDecoration(labelText: 'Author Name'),
+                onSaved: (value) {
+                  _authorName = value!;
+                },
+                validator: (value) {
+                  if (value!.isEmpty) {
+                    return 'Please enter a Author name';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
                 decoration: InputDecoration(labelText: 'Pack Name'),
                 onSaved: (value) {
                   _packName = value!;
                 },
                 validator: (value) {
                   if (value!.isEmpty) {
-                    return 'Please enter a pack name';
+                    return 'Please enter a Pack name';
                   }
                   return null;
                 },
               ),
-              // TextFormField(
-              //   decoration: InputDecoration(labelText: 'Sticker Name'),
-              //   onSaved: (value) {
-              //     _stickerName = value!;
-              //   },
-              //   validator: (value) {
-              //     if (value!.isEmpty) {
-              //       return 'Please enter a sticker name';
-              //     }
-              //     return null;
-              //   },
-              // ),
               SizedBox(height: 20.0),
               _imageFile == null
                   ? Text('No image selected.')
-                  : Image.file(_imageFile!, width: MediaQuery.of(context).size.width*0.2, height: MediaQuery.of(context).size.height*0.2,),
+                  : Image.file(_imageFile!, width: MediaQuery.of(context).size.width * 0.2, height: MediaQuery.of(context).size.height * 0.2),
               ElevatedButton(
                 onPressed: _pickImage,
                 child: Text('Select Image'),
