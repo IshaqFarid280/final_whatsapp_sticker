@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
@@ -176,7 +177,6 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     print("Created stickers directory at: ${stickersDirectory.path}");
 
     final dio = Dio();
-    final downloads = <Future>[];
 
     try {
       // Fetch pack data from Firestore
@@ -191,7 +191,7 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
 
       // Extract pack data fields with null checks
       String trayImageUrl = packDataSnapshot['pack_image'] ?? '';
-      String trayImageFileName = trayImageUrl.split('/').last;
+      String trayImageFileName = 'tray_${Random().nextInt(100000)}.webp';
       String name = packDataSnapshot['name'] ?? '';
       String publisher = 'Trending Stickers'; // Replace with actual publisher
       String privacyPolicyWebsite = 'http://example.com/privacy-policy.html'; // Replace with actual URL
@@ -202,8 +202,10 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         return;
       }
 
-      print("Downloading tray image: $trayImageUrl to ${stickersDirectory.path}/$trayImageFileName");
-      await dio.download(trayImageUrl, '${stickersDirectory.path}/$trayImageFileName');
+      // Download and convert tray image
+      String trayImagePath = '${stickersDirectory.path}/$trayImageFileName';
+      await dio.download(trayImageUrl, trayImagePath);
+      await convertImageToWebP(trayImagePath, trayImagePath);
       print("Downloaded tray image.");
 
       // Fetch stickers data from Firestore
@@ -213,17 +215,26 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         return;
       }
 
+      // Ensure we have between 3 and 30 stickers
+      if (stickersData.docs.length < 3 || stickersData.docs.length > 30) {
+        print("Invalid number of stickers: ${stickersData.docs.length}");
+        return;
+      }
+
       // Create the sticker pack
       print("Creating sticker pack with packId: ${widget.packId}");
       var stickerPack = WhatsappStickers(
         identifier: widget.packId, // Use packId as identifier for the pack
         name: name,
         publisher: publisher,
-        trayImageFileName: WhatsappStickerImage.fromFile('${stickersDirectory.path}/$trayImageFileName'),
+        trayImageFileName: WhatsappStickerImage.fromFile(trayImagePath),
         publisherWebsite: '',
         privacyPolicyWebsite: privacyPolicyWebsite,
         licenseAgreementWebsite: licenseAgreementWebsite,
       );
+
+      // Default emojis to use if none are found in the database
+      List<String> defaultEmojis = ["😊", "😂", "❤️"];
 
       // Download each sticker image
       for (var stickerSnapshot in stickersData.docs) {
@@ -231,17 +242,28 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         if (stickerData == null) continue;
 
         String imageUrl = stickerData['image_url'];
-        String stickerFileName = imageUrl.split('/').last;
+        String stickerFileName = '${Random().nextInt(100000)}.webp';
+
+        // Determine the local file path
+        String localFilePath = '${stickersDirectory.path}/$stickerFileName';
 
         // Download sticker image
-        String imagePath = '${stickersDirectory.path}/${DateTime.now().millisecondsSinceEpoch}.webp'; // New path with .webp extension
-        print("Downloading sticker: $imageUrl to $imagePath");
-        await dio.download(imageUrl, imagePath);
+        await dio.download(imageUrl, localFilePath);
         print("Downloaded sticker: $imageUrl");
 
-        // Add sticker to pack using the new .webp path
-        print("Adding sticker to pack: $imagePath");
-        stickerPack.addSticker(WhatsappStickerImage.fromFile(imagePath), []);
+        // Convert sticker to WebP format
+        await convertImageToWebP(localFilePath, localFilePath);
+        print("Converted and saved sticker: $localFilePath");
+
+        // Use dummy emojis if none are provided
+        List<String> emojis = stickerData['emojis'] ?? defaultEmojis;
+        if (emojis.length > 3) {
+          print("Too many emojis for sticker: $localFilePath. Using only the first 3.");
+          emojis = emojis.sublist(0, 3);
+        }
+
+        // Add sticker to pack using the .webp path
+        stickerPack.addSticker(WhatsappStickerImage.fromFile(localFilePath), emojis);
       }
 
       print("All stickers added to the pack.");
@@ -261,19 +283,25 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     }
   }
 
-  // Function to convert image to WebP format
-  Future<void> convertImageToWebP(String imageUrl, String outputPath) async {
+
+  Future<void> convertImageToWebP(String imagePath, String outputPath) async {
     try {
-      var response = await Dio().get(imageUrl, options: Options(responseType: ResponseType.bytes));
-      List<int> imageBytes = response.data as List<int>;
-      Uint8List uint8List = Uint8List.fromList(imageBytes); // Convert to Uint8List
-      List<int> compressedBytes = await FlutterImageCompress.compressWithList(
-        uint8List,
+      // Compress image to WebP format
+      Uint8List? imageBytes = await FlutterImageCompress.compressWithFile(
+        imagePath,
         format: CompressFormat.webp,
-        quality: 80,
+        quality: 50,
       );
-      await File(outputPath).writeAsBytes(compressedBytes);
-      print("Converted image to WebP: $outputPath");
+
+      // Check if imageBytes is not null before proceeding
+      if (imageBytes != null) {
+        // Write compressed image bytes to file
+        await File(outputPath).writeAsBytes(imageBytes);
+
+        print("Converted image to WebP: $outputPath");
+      } else {
+        print("Failed to compress image: imageBytes is null");
+      }
     } catch (e) {
       print("Failed to convert image to WebP: $e");
     }

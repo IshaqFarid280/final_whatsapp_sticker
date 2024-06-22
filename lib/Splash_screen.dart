@@ -28,9 +28,11 @@ class _SplashScreenState extends State<SplashScreen> {
     return null;
   }
 
-  checkUserStatus() async {
-    await auth.signInAnonymously().then((value){
-      Navigator.push(context, CupertinoPageRoute(builder: (context)=> BottomScreen(userId: auth.currentUser!.uid)));
+  checkUserStatus()  {
+    Future.delayed(Duration(seconds: 3),()async{
+      await auth.signInAnonymously().then((value){
+        Navigator.push(context, CupertinoPageRoute(builder: (context)=> BottomScreen(userId: auth.currentUser!.uid)));
+      });
     });
   }
 
@@ -45,7 +47,7 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: Colors.blue,
       body: Center(
-        child: Image.asset('assets/images/splash.jpg', fit: BoxFit.cover),
+        child: Image.asset('assets/sticker_packs/what.png', fit: BoxFit.cover),
       ),
     );
   }
