@@ -138,13 +138,13 @@ packages:
     source: hosted
     version: "7.0.0"
   dio:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: dio
-      sha256: "11e40df547d418cc0c4900a9318b26304e665da6fa4755399a9ff9efd09034b5"
+      sha256: "7d328c4d898a61efc3cd93655a0955858e29a0aa647f0f9e02d59b3bb275e2e8"
       url: "https://pub.dev"
     source: hosted
-    version: "5.4.3+1"
+    version: "4.0.6"
   extended_image:
     dependency: transitive
     description:
@@ -303,7 +303,7 @@ packages:
     source: hosted
     version: "1.1.0"
   flutter_image_compress:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: flutter_image_compress
       sha256: "45a3071868092a61b11044c70422b04d39d4d9f2ef536f3c5b11fb65a1e7dd90"
@@ -769,6 +769,14 @@ packages:
       relative: true
     source: path
     version: "0.0.1+1"
+  whatsapp_stickers_plus:
+    dependency: "direct main"
+    description:
+      name: whatsapp_stickers_plus
+      sha256: a1f4c717b1d164847d25b3f0e5851356bece59004cec1b3fc216f70dabe0adcf
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   win32:
     dependency: transitive
     description:

@@ -69,7 +69,7 @@ class WhatsappStickersHandler {
       payload['animatedStickerPack'] = animatedStickerPack;
       payload['stickers'] = stickers;
       return await _channel.invokeMethod('addStickerPack', payload);
-    } on PlatformException catch (e) {
+    } on PlatformException catch (e,s) {
       switch (e.code) {
         case WhatsappStickersFileNotFoundException.CODE:
           throw WhatsappStickersFileNotFoundException(e.message);

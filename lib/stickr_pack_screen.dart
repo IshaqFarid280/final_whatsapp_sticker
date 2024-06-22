@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,8 +10,10 @@ import 'package:image_editor_plus/image_editor_plus.dart';
 import 'package:background_remover/background_remover.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:whatsapp_stickers_handler/exceptions.dart';
-import 'package:whatsapp_stickers_handler/whatsapp_stickers_handler.dart';
+import 'dart:io';
+import 'package:whatsapp_stickers_plus/whatsapp_stickers.dart';
 
 class StickerPackScreen extends StatefulWidget {
   final String packId;
@@ -75,45 +78,7 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     }
   }
 
-  WhatsappStickersHandler whatsappStickersHandler = WhatsappStickersHandler();
 
-  Future<void> _addStickersToWhatsApp() async {
-    var packDoc = await FirebaseFirestore.instance.collection('packs').doc(widget.packId).get();
-
-    if (!packDoc.exists) {
-      print('Pack not found');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sticker pack not found.')));
-      return;
-    }
-
-    var packData = packDoc.data()!;
-    var stickersQuery = FirebaseFirestore.instance.collection('packs').doc(widget.packId).collection('stickers').get();
-    var stickersData = await stickersQuery;
-
-    Map<String, List<String>> formattedStickers = {};
-    stickersData.docs.forEach((doc) {
-      formattedStickers[doc['image_url']] = ["😀,😀"]; // Replace with actual emojis if available
-    });
-
-    try {
-      await whatsappStickersHandler.addStickerPack(
-        widget.packId,
-        widget.packName,
-        'Trending Stickers',
-        widget.trayImage, // Ensure this field contains the correct tray image URL
-        "",
-        'http://kethod.com/apps/trending-stickers/privacy-policy.html',
-        'http://kethod.com/apps/trending-stickers/privacy-policy.html',
-        false, // Assuming it's not an animated sticker pack
-        formattedStickers,
-      );
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Stickers added to WhatsApp!')));
-    } catch (e,s) {
-      print('Failed to add stickers to WhatsApp: $e');
-      print('Failed to add stickers to WhatsApp: $s');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add stickers to WhatsApp.')));
-    }
-  }
 
 
 
@@ -197,6 +162,124 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     }
   }
 
+
+  Future<void> _downloadAndAddStickers() async {
+    print("Starting _downloadAndAddStickers function.");
+
+    // Get application documents directory
+    var applicationDocumentsDirectory = await getApplicationDocumentsDirectory();
+    var stickersDirectory = Directory('${applicationDocumentsDirectory.path}/stickers');
+    print("Application documents directory: ${applicationDocumentsDirectory.path}");
+
+    // Create stickers directory
+    await stickersDirectory.create(recursive: true);
+    print("Created stickers directory at: ${stickersDirectory.path}");
+
+    final dio = Dio();
+    final downloads = <Future>[];
+
+    try {
+      // Fetch pack data from Firestore
+      var packDataSnapshot = await FirebaseFirestore.instance.collection('packs').doc(widget.packId).get();
+      if (!packDataSnapshot.exists) {
+        print("Pack data not found for packId: ${widget.packId}");
+        return;
+      }
+
+      // Print all fields in the pack document snapshot for debugging
+      print("Pack data: ${packDataSnapshot.data()}");
+
+      // Extract pack data fields with null checks
+      String trayImageUrl = packDataSnapshot['pack_image'] ?? '';
+      String trayImageFileName = trayImageUrl.split('/').last;
+      String name = packDataSnapshot['name'] ?? '';
+      String publisher = 'Trending Stickers'; // Replace with actual publisher
+      String privacyPolicyWebsite = 'http://example.com/privacy-policy.html'; // Replace with actual URL
+      String licenseAgreementWebsite = 'http://example.com/license-agreement.html'; // Replace with actual URL
+
+      if (trayImageUrl.isEmpty || name.isEmpty || publisher.isEmpty) {
+        print("Required pack data fields are missing.");
+        return;
+      }
+
+      print("Downloading tray image: $trayImageUrl to ${stickersDirectory.path}/$trayImageFileName");
+      await dio.download(trayImageUrl, '${stickersDirectory.path}/$trayImageFileName');
+      print("Downloaded tray image.");
+
+      // Fetch stickers data from Firestore
+      var stickersData = await FirebaseFirestore.instance.collection('packs').doc(widget.packId).collection('stickers').get();
+      if (stickersData.docs.isEmpty) {
+        print("No stickers found for packId: ${widget.packId}");
+        return;
+      }
+
+      // Create the sticker pack
+      print("Creating sticker pack with packId: ${widget.packId}");
+      var stickerPack = WhatsappStickers(
+        identifier: widget.packId, // Use packId as identifier for the pack
+        name: name,
+        publisher: publisher,
+        trayImageFileName: WhatsappStickerImage.fromFile('${stickersDirectory.path}/$trayImageFileName'),
+        publisherWebsite: '',
+        privacyPolicyWebsite: privacyPolicyWebsite,
+        licenseAgreementWebsite: licenseAgreementWebsite,
+      );
+
+      // Download each sticker image
+      for (var stickerSnapshot in stickersData.docs) {
+        var stickerData = stickerSnapshot.data();
+        if (stickerData == null) continue;
+
+        String imageUrl = stickerData['image_url'];
+        String stickerFileName = imageUrl.split('/').last;
+
+        // Download sticker image
+        String imagePath = '${stickersDirectory.path}/${DateTime.now().millisecondsSinceEpoch}.webp'; // New path with .webp extension
+        print("Downloading sticker: $imageUrl to $imagePath");
+        await dio.download(imageUrl, imagePath);
+        print("Downloaded sticker: $imageUrl");
+
+        // Add sticker to pack using the new .webp path
+        print("Adding sticker to pack: $imagePath");
+        stickerPack.addSticker(WhatsappStickerImage.fromFile(imagePath), []);
+      }
+
+      print("All stickers added to the pack.");
+
+      // Send sticker pack to WhatsApp
+      try {
+        print("Sending sticker pack to WhatsApp.");
+        await stickerPack.sendToWhatsApp();
+        print("Sticker pack sent to WhatsApp successfully.");
+      } on WhatsappStickersException catch (e) {
+        print("Failed to send sticker pack to WhatsApp. Error: ${e.cause}");
+      }
+
+    } catch (e, s) {
+      print("Error in _downloadAndAddStickers: $e");
+      print("Error stack trace: $s");
+    }
+  }
+
+  // Function to convert image to WebP format
+  Future<void> convertImageToWebP(String imageUrl, String outputPath) async {
+    try {
+      var response = await Dio().get(imageUrl, options: Options(responseType: ResponseType.bytes));
+      List<int> imageBytes = response.data as List<int>;
+      Uint8List uint8List = Uint8List.fromList(imageBytes); // Convert to Uint8List
+      List<int> compressedBytes = await FlutterImageCompress.compressWithList(
+        uint8List,
+        format: CompressFormat.webp,
+        quality: 80,
+      );
+      await File(outputPath).writeAsBytes(compressedBytes);
+      print("Converted image to WebP: $outputPath");
+    } catch (e) {
+      print("Failed to convert image to WebP: $e");
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -256,13 +339,13 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
                     itemCount: data.length,
                     itemBuilder: (context, index) {
                       return GestureDetector(
-                        onTap: () {
-                          if (index < _imageDataList.length && _imageDataList[index] != null) {
-                            _openImageEditor(context, _imageDataList[index]!, index);
-                          } else {
-                            _showBottomSheet(context, index);
-                          }
-                        },
+                        onTap:() {
+                        if (_imageDataList[index] != null) {
+                          _openImageEditor(context, _imageDataList[index]!, index);
+                        } else {
+                          _showBottomSheet(context, index);
+                        }
+                      },
                         child: Container(
                           margin: EdgeInsets.all(4.0),
                           color: Colors.grey[200],
@@ -277,9 +360,12 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
                     },
                   ),
                 ),
-                TextButton(onPressed: (){
-                  _addStickersToWhatsApp();
-                }, child: Text('Add Stickers to WhatsApp')),
+                TextButton(
+                  onPressed: () async {
+                    await _downloadAndAddStickers();
+                  },
+                  child: Text('Add Stickers to WhatsApp'),
+                ),
               ],
             );
           }else{
