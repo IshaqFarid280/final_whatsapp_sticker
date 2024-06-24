@@ -2,6 +2,11 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.testing_sticker">
 
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="testing_sticker"
         android:name="android.app.Application"
@@ -33,6 +38,7 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Content Provider Declaration -->
 
     </application>
 </manifest>

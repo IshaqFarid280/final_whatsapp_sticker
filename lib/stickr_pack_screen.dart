@@ -12,9 +12,9 @@ import 'package:background_remover/background_remover.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:whatsapp_stickers_handler/exceptions.dart';
+import 'package:whatsapp_stickers_exporter/whatsapp_stickers_exporter.dart';
 import 'dart:io';
-import 'package:whatsapp_stickers_plus/whatsapp_stickers.dart';
+
 
 class StickerPackScreen extends StatefulWidget {
   final String packId;
@@ -167,31 +167,31 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
   Future<void> _downloadAndAddStickers() async {
     print("Starting _downloadAndAddStickers function.");
 
-    // Get application documents directory
     var applicationDocumentsDirectory = await getApplicationDocumentsDirectory();
     var stickersDirectory = Directory('${applicationDocumentsDirectory.path}/stickers');
     print("Application documents directory: ${applicationDocumentsDirectory.path}");
 
-    // Create stickers directory
     await stickersDirectory.create(recursive: true);
     print("Created stickers directory at: ${stickersDirectory.path}");
+
+    // Create separate directory for tray image
+    var trayImagesDirectory = Directory('${stickersDirectory.path}/tray_images');
+    await trayImagesDirectory.create(recursive: true);
+    print("Created tray images directory at: ${trayImagesDirectory.path}");
 
     final dio = Dio();
 
     try {
-      // Fetch pack data from Firestore
       var packDataSnapshot = await FirebaseFirestore.instance.collection('packs').doc(widget.packId).get();
       if (!packDataSnapshot.exists) {
         print("Pack data not found for packId: ${widget.packId}");
         return;
       }
 
-      // Print all fields in the pack document snapshot for debugging
       print("Pack data: ${packDataSnapshot.data()}");
 
-      // Extract pack data fields with null checks
       String trayImageUrl = packDataSnapshot['pack_image'] ?? '';
-      String trayImageFileName = 'tray_${Random().nextInt(100000)}.webp';
+      String trayImageFileName = 'tray_${Random().nextInt(100000)}.png'; // Ensure PNG format for tray image
       String name = packDataSnapshot['name'] ?? '';
       String publisher = 'Trending Stickers'; // Replace with actual publisher
       String privacyPolicyWebsite = 'http://example.com/privacy-policy.html'; // Replace with actual URL
@@ -202,41 +202,33 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         return;
       }
 
-      // Download and convert tray image
-      String trayImagePath = '${stickersDirectory.path}/$trayImageFileName';
+      // Download tray image and save in tray images directory
+      String trayImagePath = '${trayImagesDirectory.path}/$trayImageFileName';
       await dio.download(trayImageUrl, trayImagePath);
-      await convertImageToWebP(trayImagePath, trayImagePath);
-      print("Downloaded tray image.");
+      print("Downloaded tray image as PNG: $trayImagePath");
 
-      // Fetch stickers data from Firestore
+      if (!await File(trayImagePath).exists()) {
+        print("Tray image file does not exist: $trayImagePath");
+        return;
+      }
+
       var stickersData = await FirebaseFirestore.instance.collection('packs').doc(widget.packId).collection('stickers').get();
       if (stickersData.docs.isEmpty) {
         print("No stickers found for packId: ${widget.packId}");
         return;
       }
 
-      // Ensure we have between 3 and 30 stickers
       if (stickersData.docs.length < 3 || stickersData.docs.length > 30) {
         print("Invalid number of stickers: ${stickersData.docs.length}");
         return;
       }
 
-      // Create the sticker pack
-      print("Creating sticker pack with packId: ${widget.packId}");
-      var stickerPack = WhatsappStickers(
-        identifier: widget.packId, // Use packId as identifier for the pack
-        name: name,
-        publisher: publisher,
-        trayImageFileName: WhatsappStickerImage.fromFile(trayImagePath),
-        publisherWebsite: '',
-        privacyPolicyWebsite: privacyPolicyWebsite,
-        licenseAgreementWebsite: licenseAgreementWebsite,
-      );
+      print("Creating sticker set for packId: ${widget.packId}");
 
-      // Default emojis to use if none are found in the database
+      List<List<String>> stickerSet = [];
+
       List<String> defaultEmojis = ["😊", "😂", "❤️"];
 
-      // Download each sticker image
       for (var stickerSnapshot in stickersData.docs) {
         var stickerData = stickerSnapshot.data();
         if (stickerData == null) continue;
@@ -244,37 +236,50 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         String imageUrl = stickerData['image_url'];
         String stickerFileName = '${Random().nextInt(100000)}.webp';
 
-        // Determine the local file path
         String localFilePath = '${stickersDirectory.path}/$stickerFileName';
 
-        // Download sticker image
-        await dio.download(imageUrl, localFilePath);
-        print("Downloaded sticker: $imageUrl");
+        try {
+          await dio.download(imageUrl, localFilePath);
+          print("Downloaded sticker: $imageUrl");
 
-        // Convert sticker to WebP format
-        await convertImageToWebP(localFilePath, localFilePath);
-        print("Converted and saved sticker: $localFilePath");
+          // Ensure the sticker file exists
+          if (!await File(localFilePath).exists()) {
+            print("Sticker file does not exist: $localFilePath");
+            continue; // Skip to next sticker on failure
+          }
 
-        // Use dummy emojis if none are provided
-        List<String> emojis = stickerData['emojis'] ?? defaultEmojis;
-        if (emojis.length > 3) {
-          print("Too many emojis for sticker: $localFilePath. Using only the first 3.");
-          emojis = emojis.sublist(0, 3);
+          List<String> emojis = stickerData['emojis'] ?? defaultEmojis;
+          if (emojis.length > 3) {
+            print("Too many emojis for sticker: $localFilePath. Using only the first 3.");
+            emojis = emojis.sublist(0, 3);
+          }
+
+          List<String> stickerObject = [];
+          stickerObject.add(WhatsappStickerImage.fromFile(localFilePath).path);
+          stickerObject.addAll(emojis);
+
+          stickerSet.add(stickerObject);
+        } catch (e) {
+          print("Error downloading or processing sticker: $e");
         }
-
-        // Add sticker to pack using the .webp path
-        stickerPack.addSticker(WhatsappStickerImage.fromFile(localFilePath), emojis);
       }
 
-      print("All stickers added to the pack.");
-
-      // Send sticker pack to WhatsApp
+      var exporter = WhatsappStickersExporter();
       try {
-        print("Sending sticker pack to WhatsApp.");
-        await stickerPack.sendToWhatsApp();
+        await exporter.addStickerPack(
+            widget.packId, // identifier
+            name, // name
+            publisher, // publisher
+            WhatsappStickerImage.fromFile(trayImagePath).path, // trayImage
+            '', // publisherWebsite
+            privacyPolicyWebsite, // privacyPolicyWebsite
+            licenseAgreementWebsite, // licenseAgreementWebsite
+            false, // animatedStickerPack
+            stickerSet
+        );
         print("Sticker pack sent to WhatsApp successfully.");
-      } on WhatsappStickersException catch (e) {
-        print("Failed to send sticker pack to WhatsApp. Error: ${e.cause}");
+      } catch (e) {
+        print("Failed to send sticker pack to WhatsApp. Error: $e");
       }
 
     } catch (e, s) {

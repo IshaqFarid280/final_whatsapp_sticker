@@ -12,8 +12,6 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.2
-  whatsapp_stickers_handler:
-    path: ./plugins/whatsapp_stickers_handler
   firebase_core:
   firebase_auth:
   firebase_storage:
@@ -30,8 +28,8 @@ dependencies:
   image: ^4.2.0
   device_info_plus:
   dio: ^4.0.0
-  whatsapp_stickers_plus:
   flutter_image_compress:
+  whatsapp_stickers_exporter: ^1.0.0
 
 dev_dependencies:
   flutter_test:
