@@ -40,14 +40,12 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         imageData,
         minWidth: 512,
         minHeight: 512,
-        quality: 50, // Adjust quality to get the size under 100KB
+        quality: 50,
         format: CompressFormat.webp
       );
-
-      // Check if the image size is less than 100KB
       if (result.lengthInBytes < 100 * 1024) { // 100KB in bytes
         String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-        Reference storageRef = FirebaseStorage.instance.ref().child('stickers/$fileName.webp');
+        Reference storageRef = FirebaseStorage.instance.ref().child('stickers/$fileName.png');
         UploadTask uploadTask = storageRef.putData(result);
         TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => null);
         String imageUrl = await taskSnapshot.ref.getDownloadURL();
@@ -282,8 +280,6 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
       print("Error stack trace: $s");
     }
   }
-
-
   Future<void> convertImageToWebP(String imagePath, String outputPath) async {
     try {
       // Compress image to WebP format
@@ -306,7 +302,6 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
       print("Failed to convert image to WebP: $e");
     }
   }
-
 
   @override
   Widget build(BuildContext context) {

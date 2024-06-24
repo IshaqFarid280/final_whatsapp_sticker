@@ -32,6 +32,7 @@ dependencies:
   dio: ^4.0.0
   whatsapp_stickers_plus:
   flutter_image_compress:
+  whatsapp_stickers_exporter: ^1.0.0
 
 dev_dependencies:
   flutter_test:
