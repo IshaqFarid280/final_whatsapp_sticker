@@ -1,8 +1,8 @@
 import 'package:background_remover/background_remover.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
+import 'package:extended_image/extended_image.dart';
 
 class BackgroundOptionScreen extends StatefulWidget {
   final Uint8List imageData;
@@ -67,40 +67,75 @@ class _BackgroundOptionScreenState extends State<BackgroundOptionScreen> {
       appBar: AppBar(
         title: Text('Background Options'),
       ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (_isProcessing)
-            CircularProgressIndicator()
-          else
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: _backgroundRemoved ? 3 : 0),
+      body: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_isProcessing)
+              CircularProgressIndicator()
+            else
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white, width: 4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ExtendedImage.memory(
+                  _currentImageData,
+                  fit: BoxFit.cover,
+                  border: Border.all(color: Colors.white, width: 4),
+                  borderRadius: BorderRadius.circular(8),
+                  shape: BoxShape.rectangle,
+                ),
               ),
-              child: Image.memory(_currentImageData),
+            SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.no_photography),
+                  onPressed: _backgroundRemoved ? _rollbackBackground : null,
+                ),
+                IconButton(
+                  icon: Icon(Icons.auto_fix_high),
+                  onPressed: _isProcessing ? null : _removeBackground,
+                ),
+                IconButton(
+                  icon: Icon(Icons.arrow_forward),
+                  onPressed: () {
+                    widget.onImageReady(_currentImageData);
+                  },
+                ),
+              ],
             ),
-          SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                icon: Icon(Icons.no_photography),
-                onPressed: _backgroundRemoved ? _rollbackBackground : null,
-              ),
-              IconButton(
-                icon: Icon(Icons.auto_fix_high),
-                onPressed: _isProcessing ? null : _removeBackground,
-              ),
-              IconButton(
-                icon: Icon(Icons.arrow_forward),
-                onPressed: () {
-                  widget.onImageReady(_currentImageData);
-                },
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+}
+
+class MyPainter extends CustomPainter {
+  final double strokeWidth;
+  final Color strokeColor;
+
+  MyPainter({required this.strokeWidth, required this.strokeColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = strokeColor
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2;
+
+    canvas.drawCircle(center, radius - (strokeWidth / 2), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
   }
 }

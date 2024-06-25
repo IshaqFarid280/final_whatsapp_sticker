@@ -12,8 +12,6 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.2
-  whatsapp_stickers_handler:
-    path: ./plugins/whatsapp_stickers_handler
   firebase_core:
   firebase_auth:
   firebase_storage:
@@ -30,9 +28,11 @@ dependencies:
   image: ^4.2.0
   device_info_plus:
   dio: ^4.0.0
-  whatsapp_stickers_plus:
   flutter_image_compress:
   whatsapp_stickers_exporter: ^1.0.0
+  flutter_image_stack: ^0.0.7
+  extended_image: ^8.2.1
+  sn_progress_dialog: ^1.1.4
 
 dev_dependencies:
   flutter_test:
@@ -45,6 +45,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+   - assets/
    - assets/sticker_packs/what.png
 
   # An image asset can refer to one or more resolution-specific "variants", see

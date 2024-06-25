@@ -7,39 +7,112 @@ import 'dart:io';
 import 'BottomScreen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({Key? key}) : super(key: key);
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  _SplashScreenState createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  FirebaseAuth  auth = FirebaseAuth.instance;
-
-  Future<String?> getDeviceId() async {
-    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    if (Platform.isAndroid) {
-      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-      return androidInfo.id; // unique ID on Android
-    } else if (Platform.isIOS) {
-      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-      return iosInfo.identifierForVendor; // unique ID on iOS
-    }
-    return null;
-  }
-
-  checkUserStatus()  {
-    Future.delayed(Duration(seconds: 3),()async{
-      await auth.signInAnonymously().then((value){
-        Navigator.push(context, CupertinoPageRoute(builder: (context)=> BottomScreen(userId: auth.currentUser!.uid)));
-      });
-    });
-  }
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  late User? _user;
 
   @override
   void initState() {
     super.initState();
-    checkUserStatus();
+    _checkCurrentUser();
+  }
+
+  Future<void> _checkCurrentUser() async {
+    _user = _auth.currentUser;
+
+    if (_user == null) {
+      // No user is signed in, attempt to sign in automatically with device ID
+      await _signInWithDeviceId();
+    } else {
+      // User is already signed in, navigate to appropriate screen
+      _navigateToBottomScreen();
+    }
+  }
+
+  Future<void> _signInWithDeviceId() async {
+    String deviceId = await _getDeviceId();
+    print('${deviceId} the device id');
+
+    // Construct email with device ID
+    String email = 'users${deviceId}@gmail.com'; // Use \$ to escape $ in strings
+    String password = '12345678'; // Default password
+
+    print('${email} the email');
+    try {
+      // Sign in with email and password
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      _user = userCredential.user;
+
+      // Navigate to bottom screen after successful login
+      _navigateToBottomScreen();
+    } catch (e) {
+      // If user does not exist, attempt to create account
+      if (e is FirebaseAuthException && e.code == 'user-not-found') {
+        try {
+          UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+          _user = userCredential.user;
+
+          // Navigate to bottom screen after successful signup
+          _navigateToBottomScreen();
+        } catch (e) {
+          print('Failed to create user: $e');
+          // Handle sign-up failure, e.g., show an error message
+        }
+      }
+      else  if (e is FirebaseAuthException && e.code == 'invalid-credential') {
+        try {
+          UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+          _user = userCredential.user;
+
+          // Navigate to bottom screen after successful signup
+          _navigateToBottomScreen();
+        } catch (e) {
+          print('Failed to create user: $e');
+          // Handle sign-up failure, e.g., show an error message
+        }
+      }
+
+      else {
+        print('Failed to sign in: $e');
+        // Handle other sign-in errors
+      }
+    }
+  }
+
+  Future<String> _getDeviceId() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      return androidInfo.id; // unique ID on Android
+    }
+    throw UnsupportedError('Unsupported platform');
+  }
+
+  void _navigateToBottomScreen() {
+    if (_user != null) {
+      Navigator.pushReplacement(
+        context,
+        CupertinoPageRoute(builder: (context) => BottomScreen(userId: _user!.uid)),
+      );
+    } else {
+      // Handle case where user is not authenticated
+      // You might want to show an error message or handle this scenario differently
+    }
   }
 
   @override

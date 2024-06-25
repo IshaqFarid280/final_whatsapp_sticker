@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:testing_sticker/upload_stickers.dart';
-import 'package:testing_sticker/user_stickers.dart';
-import 'all_screens.dart';
+import 'package:testing_sticker/views/myStickers/upload_stickers.dart';
+import 'package:testing_sticker/views/myStickers/my_stickers.dart';
+import 'package:testing_sticker/views/allStickers/all_sticker_screens.dart';
 
 
 
@@ -49,9 +49,9 @@ class _BottomScreenState extends State<BottomScreen> {
               });
             },
             items: const [
-              BottomNavigationBarItem(icon:Icon(Icons.public_outlined),label:'Tournaments'),
-              BottomNavigationBarItem(icon:Icon(Icons.person),label:'Challenges'),
-              BottomNavigationBarItem(icon:Icon(Icons.groups_2_outlined),label:'My Matches'),
+              BottomNavigationBarItem(icon:Icon(Icons.public_outlined),label:'Community'),
+              BottomNavigationBarItem(icon:Icon(Icons.person),label:'My Sticker'),
+              BottomNavigationBarItem(icon:Icon(Icons.groups_2_outlined),label:'Create'),
             ],
     )
     );

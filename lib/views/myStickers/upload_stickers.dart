@@ -80,6 +80,8 @@ class _UploadStickerScreenState extends State<UploadStickerScreen> {
           'user_id': userId,
           'is_animated': 'false',
           'author_name': _authorName,
+          'favorites' : '',
+          'downloads' :''
         });
       }
     }

@@ -1,34 +1,35 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:sn_progress_dialog/sn_progress_dialog.dart';
+import 'package:background_remover/background_remover.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_editor_plus/image_editor_plus.dart';
 import 'package:image_editor_plus/options.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_editor_plus/image_editor_plus.dart';
-import 'package:background_remover/background_remover.dart';
-import 'package:image/image.dart' as img;
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:whatsapp_stickers_handler/exceptions.dart';
-import 'dart:io';
-import 'package:whatsapp_stickers_plus/whatsapp_stickers.dart';
+import 'package:testing_sticker/background_remover_screen.dart';
+import 'package:whatsapp_stickers_exporter/whatsapp_stickers_exporter.dart';
 
-class StickerPackScreen extends StatefulWidget {
+class AllStickerCommunityScreen extends StatefulWidget {
   final String packId;
   final String packName;
   final String userId ;
   final String trayImage ;
 
-  StickerPackScreen({required this.packId, required this.packName,required this.userId,required this.trayImage});
+  AllStickerCommunityScreen({required this.packId, required this.packName,required this.userId,required this.trayImage});
 
   @override
-  _StickerPackScreenState createState() => _StickerPackScreenState();
+  State<AllStickerCommunityScreen> createState() => _AllStickerCommunityScreenState();
 }
 
-class _StickerPackScreenState extends State<StickerPackScreen> {
+class _AllStickerCommunityScreenState extends State<AllStickerCommunityScreen> {
   List<Uint8List?> _imageDataList = List.generate(30, (index) => null);
   List<bool> _isUploading = List.generate(30, (index) => false);
 
@@ -37,15 +38,17 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     try {
       // Compress the image to reduce size
       var result = await FlutterImageCompress.compressWithList(
-        imageData,
-        minWidth: 512,
-        minHeight: 512,
-        quality: 50,
-        format: CompressFormat.webp
+          imageData,
+          minWidth: 512,
+          minHeight: 512,
+          quality: 50, // Adjust quality to get the size under 100KB
+          format: CompressFormat.webp
       );
+
+      // Check if the image size is less than 100KB
       if (result.lengthInBytes < 100 * 1024) { // 100KB in bytes
         String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-        Reference storageRef = FirebaseStorage.instance.ref().child('stickers/$fileName.png');
+        Reference storageRef = FirebaseStorage.instance.ref().child('stickers/$fileName.webp');
         UploadTask uploadTask = storageRef.putData(result);
         TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => null);
         String imageUrl = await taskSnapshot.ref.getDownloadURL();
@@ -77,10 +80,6 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     }
   }
 
-
-
-
-
   void _showBottomSheet(BuildContext context, int index) {
     showModalBottomSheet(
       context: context,
@@ -89,18 +88,34 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
           packId: widget.packId,
           onImageSelected: (Uint8List imageData) async {
             // Remove background and resize to 400x400
-            Uint8List? imageWithoutBackground = await _removeBackground(imageData);
-            if (imageWithoutBackground != null) {
-              setState(() {
-                _imageDataList[index] = imageWithoutBackground;
-              });
-              Navigator.pop(context);
-              _openImageEditor(context, imageWithoutBackground, index);
-            }
+            // Uint8List? imageWithoutBackground = await _removeBackground(imageData);
+            // if (imageWithoutBackground != null) {
+            //   setState(() {
+            //     _imageDataList[index] = imageWithoutBackground;
+            //   });
+            //   Navigator.pop(context);
+            //   _openImageEditor(context, imageWithoutBackground, index);
+            // }
+            Navigator.push(context, CupertinoPageRoute(
+                builder: (ctx) => BackgroundOptionScreen(
+                    imageData: imageData,
+                    onImageReady: (processedImage){
+                      setState(() {
+                        _imageDataList[index] = processedImage;
+                      });
+                      _openImageEditor(context, processedImage, index);
+                    })));
           },
         );
       },
     );
+  }
+
+  Future<void> _incrementDownloadCount(String packId) async {
+    DocumentReference packRef = FirebaseFirestore.instance.collection('packs').doc(packId);
+    await packRef.update({
+      'download_count': FieldValue.increment(1)
+    });
   }
 
   Future<Uint8List?> _removeBackground(Uint8List imageData) async {
@@ -136,7 +151,7 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
   }
 
   Future<void> _openImageEditor(BuildContext context, Uint8List imageData, int index) async {
-    var editedImageData = await Navigator.push(
+    var editedImageData = await Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => ImageEditor(
@@ -165,31 +180,31 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
   Future<void> _downloadAndAddStickers() async {
     print("Starting _downloadAndAddStickers function.");
 
-    // Get application documents directory
     var applicationDocumentsDirectory = await getApplicationDocumentsDirectory();
     var stickersDirectory = Directory('${applicationDocumentsDirectory.path}/stickers');
     print("Application documents directory: ${applicationDocumentsDirectory.path}");
 
-    // Create stickers directory
     await stickersDirectory.create(recursive: true);
     print("Created stickers directory at: ${stickersDirectory.path}");
+
+    // Create separate directory for tray image
+    var trayImagesDirectory = Directory('${stickersDirectory.path}/tray_images');
+    await trayImagesDirectory.create(recursive: true);
+    print("Created tray images directory at: ${trayImagesDirectory.path}");
 
     final dio = Dio();
 
     try {
-      // Fetch pack data from Firestore
       var packDataSnapshot = await FirebaseFirestore.instance.collection('packs').doc(widget.packId).get();
       if (!packDataSnapshot.exists) {
         print("Pack data not found for packId: ${widget.packId}");
         return;
       }
 
-      // Print all fields in the pack document snapshot for debugging
       print("Pack data: ${packDataSnapshot.data()}");
 
-      // Extract pack data fields with null checks
       String trayImageUrl = packDataSnapshot['pack_image'] ?? '';
-      String trayImageFileName = 'tray_${Random().nextInt(100000)}.webp';
+      String trayImageFileName = 'tray_${Random().nextInt(100000)}.png'; // Ensure PNG format for tray image
       String name = packDataSnapshot['name'] ?? '';
       String publisher = 'Trending Stickers'; // Replace with actual publisher
       String privacyPolicyWebsite = 'http://example.com/privacy-policy.html'; // Replace with actual URL
@@ -200,41 +215,33 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         return;
       }
 
-      // Download and convert tray image
-      String trayImagePath = '${stickersDirectory.path}/$trayImageFileName';
+      // Download tray image and save in tray images directory
+      String trayImagePath = '${trayImagesDirectory.path}/$trayImageFileName';
       await dio.download(trayImageUrl, trayImagePath);
-      await convertImageToWebP(trayImagePath, trayImagePath);
-      print("Downloaded tray image.");
+      print("Downloaded tray image as PNG: $trayImagePath");
 
-      // Fetch stickers data from Firestore
+      if (!await File(trayImagePath).exists()) {
+        print("Tray image file does not exist: $trayImagePath");
+        return;
+      }
+
       var stickersData = await FirebaseFirestore.instance.collection('packs').doc(widget.packId).collection('stickers').get();
       if (stickersData.docs.isEmpty) {
         print("No stickers found for packId: ${widget.packId}");
         return;
       }
 
-      // Ensure we have between 3 and 30 stickers
       if (stickersData.docs.length < 3 || stickersData.docs.length > 30) {
         print("Invalid number of stickers: ${stickersData.docs.length}");
         return;
       }
 
-      // Create the sticker pack
-      print("Creating sticker pack with packId: ${widget.packId}");
-      var stickerPack = WhatsappStickers(
-        identifier: widget.packId, // Use packId as identifier for the pack
-        name: name,
-        publisher: publisher,
-        trayImageFileName: WhatsappStickerImage.fromFile(trayImagePath),
-        publisherWebsite: '',
-        privacyPolicyWebsite: privacyPolicyWebsite,
-        licenseAgreementWebsite: licenseAgreementWebsite,
-      );
+      print("Creating sticker set for packId: ${widget.packId}");
 
-      // Default emojis to use if none are found in the database
+      List<List<String>> stickerSet = [];
+
       List<String> defaultEmojis = ["😊", "😂", "❤️"];
 
-      // Download each sticker image
       for (var stickerSnapshot in stickersData.docs) {
         var stickerData = stickerSnapshot.data();
         if (stickerData == null) continue;
@@ -242,37 +249,51 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
         String imageUrl = stickerData['image_url'];
         String stickerFileName = '${Random().nextInt(100000)}.webp';
 
-        // Determine the local file path
         String localFilePath = '${stickersDirectory.path}/$stickerFileName';
 
-        // Download sticker image
-        await dio.download(imageUrl, localFilePath);
-        print("Downloaded sticker: $imageUrl");
+        try {
+          await dio.download(imageUrl, localFilePath);
+          print("Downloaded sticker: $imageUrl");
 
-        // Convert sticker to WebP format
-        await convertImageToWebP(localFilePath, localFilePath);
-        print("Converted and saved sticker: $localFilePath");
+          // Ensure the sticker file exists
+          if (!await File(localFilePath).exists()) {
+            print("Sticker file does not exist: $localFilePath");
+            continue; // Skip to next sticker on failure
+          }
 
-        // Use dummy emojis if none are provided
-        List<String> emojis = stickerData['emojis'] ?? defaultEmojis;
-        if (emojis.length > 3) {
-          print("Too many emojis for sticker: $localFilePath. Using only the first 3.");
-          emojis = emojis.sublist(0, 3);
+          List<String> emojis = stickerData['emojis'] ?? defaultEmojis;
+          if (emojis.length > 3) {
+            print("Too many emojis for sticker: $localFilePath. Using only the first 3.");
+            emojis = emojis.sublist(0, 3);
+          }
+
+          List<String> stickerObject = [];
+          stickerObject.add(WhatsappStickerImage.fromFile(localFilePath).path);
+          stickerObject.addAll(emojis);
+
+          stickerSet.add(stickerObject);
+        } catch (e) {
+          print("Error downloading or processing sticker: $e");
         }
-
-        // Add sticker to pack using the .webp path
-        stickerPack.addSticker(WhatsappStickerImage.fromFile(localFilePath), emojis);
       }
 
-      print("All stickers added to the pack.");
-
-      // Send sticker pack to WhatsApp
+      var exporter = WhatsappStickersExporter();
       try {
-        print("Sending sticker pack to WhatsApp.");
-        await stickerPack.sendToWhatsApp();
+        await exporter.addStickerPack(
+            widget.packId, // identifier
+            name, // name
+            publisher, // publisher
+            WhatsappStickerImage.fromFile(trayImagePath).path, // trayImage
+            '', // publisherWebsite
+            privacyPolicyWebsite, // privacyPolicyWebsite
+            licenseAgreementWebsite, // licenseAgreementWebsite
+            false, // animatedStickerPack
+            stickerSet
+        );
+        _incrementDownloadCount(widget.packId);
         print("Sticker pack sent to WhatsApp successfully.");
-      } on WhatsappStickersException catch (e) {
-        print("Failed to send sticker pack to WhatsApp. Error: ${e.cause}");
+      } catch (e) {
+        print("Failed to send sticker pack to WhatsApp. Error: $e");
       }
 
     } catch (e, s) {
@@ -280,6 +301,8 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
       print("Error stack trace: $s");
     }
   }
+
+
   Future<void> convertImageToWebP(String imagePath, String outputPath) async {
     try {
       // Compress image to WebP format
@@ -303,19 +326,29 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     }
   }
 
+  bool _isLoading = false;
+  ProgressDialog? _progressDialog;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressDialog = ProgressDialog(context: context);
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: true,
         title: Text(widget.packName),
       ),
       body: StreamBuilder(
         stream: FirebaseFirestore.instance.collection('packs').doc(widget.packId).collection('stickers').snapshots(),
-        builder: (context,AsyncSnapshot<QuerySnapshot> snapshot ){
-          if(snapshot.connectionState == ConnectionState.waiting){
-            return Center(child: CupertinoActivityIndicator(),);
-          }else if (snapshot.data!.docs.isEmpty){
+        builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CupertinoActivityIndicator());
+          } else if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            // If no stickers exist in Firestore, show 30 empty slots
             return GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 5,
@@ -346,55 +379,122 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
                 );
               },
             );
-          }else if (snapshot.hasData){
+          }
+          else {
+            // If stickers exist in Firestore, populate existing stickers and show remaining empty slots
             var data = snapshot.data!.docs;
+            List<String> imageUrlList = data.map((doc) => doc['image_url'] as String).toList();
+
             return Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Author Name here'),
+
+                      Row(
+                        children: [
+                          Icon(Icons.favorite_border, ),
+                          SizedBox(width: MediaQuery.of(context).size.width*0.02,),
+
+                          Icon(Icons.share, ),
+                          SizedBox(width: MediaQuery.of(context).size.width*0.02,),
+                        ],
+                      )
+                    ],),
+                ),
                 Expanded(
                   child: GridView.builder(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 5,
                       childAspectRatio: 1,
                     ),
-                    shrinkWrap: true,
-                    scrollDirection: Axis.vertical,
-                    physics: BouncingScrollPhysics(),
-                    itemCount: data.length,
+                    itemCount: 30,
                     itemBuilder: (context, index) {
-                      return GestureDetector(
-                        onTap:() {
-                        if (_imageDataList[index] != null) {
-                          _openImageEditor(context, _imageDataList[index]!, index);
-                        } else {
-                          _showBottomSheet(context, index);
-                        }
-                      },
-                        child: Container(
-                          margin: EdgeInsets.all(4.0),
-                          color: Colors.grey[200],
-                          child: data[index]['image_url'] != null
-                              ? Image.network(
-                            data[index]['image_url'],
-                            fit: BoxFit.cover,
-                          )
-                              : Icon(Icons.add),
-                        ),
-                      );
+                      if (index < imageUrlList.length) {
+                        // Show existing stickers from Firestore
+                        return GestureDetector(
+                          onTap: () {
+                            if (_imageDataList[index] != null) {
+                              _openImageEditor(context, _imageDataList[index]!, index);
+                            } else {
+                              _showBottomSheet(context, index);
+                            }
+                          },
+                          child: Container(
+                            margin: EdgeInsets.all(4.0),
+                            color: Colors.grey[200],
+                            child: imageUrlList[index] != null
+                                ? Image.network(
+                              imageUrlList[index],
+                              fit: BoxFit.cover,
+                            )
+                                : Icon(Icons.add),
+                          ),
+                        );
+                      } else {
+                        // Show empty slots for new stickers
+                        return GestureDetector(
+                          onTap: () {
+                            _showBottomSheet(context, index);
+                          },
+                          child: Container(
+                            margin: EdgeInsets.all(4.0),
+                            color: Colors.grey[200],
+                            child: _isUploading[index]
+                                ? Center(child: CircularProgressIndicator())
+                                : Container(
+                              decoration: BoxDecoration(
+                                // No color specified, so the background will be removed
+                                border: Border.all(
+                                  color: Colors.blue, // Border color
+                                  width: 3.0,         // Border width
+                                ),),
+                              child: _imageDataList[index] != null
+                                  ? Image.memory(
+                                _imageDataList[index]!,
+                                fit: BoxFit.cover,
+
+                              )
+                                  : Icon(Icons.add,
+                                color: Colors.blue,),
+                            ),
+                          ),
+                        );
+                      }
                     },
                   ),
                 ),
-                TextButton(
+                ElevatedButton(
                   onPressed: () async {
-                    await _downloadAndAddStickers();
+                    _progressDialog!.show(
+                      max: 100,
+                      msg: 'Downloading stickers...',
+                      progressType: ProgressType.valuable,
+                    );
+                    try {
+                      await _downloadAndAddStickers();
+                    } catch (e) {
+                      // Handle error here, e.g., show a Snackbar
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to add stickers to WhatsApp.')),
+                      );
+                    } finally {
+
+                      _progressDialog!.close();
+                    }
                   },
                   child: Text('Add Stickers to WhatsApp'),
                 ),
+                // if (_isLoading)
+                //   CupertinoActivityIndicator(),
               ],
             );
-          }else{
-            return Center(child: Icon(Icons.error),);
           }
-        }
+
+        },
       ),
     );
   }
